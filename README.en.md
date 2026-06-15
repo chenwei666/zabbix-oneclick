@@ -20,6 +20,7 @@ It is a single-file launcher. On first run, it extracts the deployment files to:
 - Automatic Docker installation guidance or bootstrap
 - Windows 10/11 Docker Desktop support
 - Windows Server WSL2 + Ubuntu + Docker Engine path
+- Automatic detection and reuse of existing Docker Engine inside any installed WSL distro
 - Linux Docker Engine installer script
 - Docker Compose stack for MySQL, Zabbix Server, Web UI, Agent2, Java Gateway, and Web Service
 - Port conflict checks
@@ -70,6 +71,16 @@ chmod +x *.sh
 ```
 
 If Docker is missing, the script can install Docker Engine using Docker's official convenience script.
+
+## Windows and WSL Docker Detection
+
+On Windows, the launcher checks environments in this order:
+
+1. Native Docker Desktop with Linux containers.
+2. Any installed WSL distro that already has Docker Engine and Docker Compose.
+3. Docker installation/bootstrap flow.
+
+On Windows Server, Docker Desktop is not used. The launcher first scans existing WSL distros and directly deploys through the first working Docker Engine it finds. If no WSL Docker environment exists, it installs/prepares Ubuntu 24.04 with Docker Engine.
 
 ## Update
 

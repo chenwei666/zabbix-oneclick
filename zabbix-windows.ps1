@@ -6,6 +6,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 Set-Location -LiteralPath $PSScriptRoot
+$script:WslDistro = $null
 
 function Write-Title {
   param([string]$Text)
@@ -161,12 +162,39 @@ function Test-PortsBeforeStart {
 
 function Ensure-Docker {
   $os = Get-CimInstance Win32_OperatingSystem
-  if ($os.ProductType -ne 1) {
-    Ensure-WindowsServerDocker
+
+  $docker = Get-Command docker -ErrorAction SilentlyContinue
+  if ($docker) {
+    docker info *> $null
+    $infoOk = ($LASTEXITCODE -eq 0)
+    docker compose version *> $null
+    $composeOk = ($LASTEXITCODE -eq 0)
+    if ($infoOk -and $composeOk) {
+      $osType = (docker info --format '{{.OSType}}').Trim()
+      if ($osType -eq 'linux') {
+        return 'windows'
+      }
+      Write-Host "Native Docker is using '$osType' containers. Looking for WSL Docker..."
+    }
+  }
+
+  $wslDistro = Find-WslDockerDistro
+  if ($wslDistro) {
+    $script:WslDistro = $wslDistro
+    Write-Host "Using Docker inside WSL distro: $wslDistro"
     return 'wsl'
   }
 
-  $docker = Get-Command docker -ErrorAction SilentlyContinue
+  if ($os.ProductType -ne 1) {
+    Ensure-WindowsServerDocker
+    $wslDistro = Find-WslDockerDistro
+    if ($wslDistro) {
+      $script:WslDistro = $wslDistro
+      return 'wsl'
+    }
+    throw 'Windows Server Docker setup finished, but no working WSL Docker distro was found.'
+  }
+
   if (-not $docker) {
     Write-Host 'Docker was not found. Starting Docker installation...'
     PowerShell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'install-docker-windows.ps1')
@@ -195,7 +223,13 @@ function Ensure-Docker {
       } while ((Get-Date) -lt $deadline)
     }
     if ($LASTEXITCODE -ne 0) {
-      throw 'Docker is installed but not running, or the current user cannot access Docker.'
+      $wslDistro = Find-WslDockerDistro
+      if ($wslDistro) {
+        $script:WslDistro = $wslDistro
+        Write-Host "Using Docker inside WSL distro: $wslDistro"
+        return 'wsl'
+      }
+      throw 'Docker is installed but not running, and no working WSL Docker distro was found.'
     }
   }
 
@@ -206,16 +240,75 @@ function Ensure-Docker {
 
   $osType = (docker info --format '{{.OSType}}').Trim()
   if ($osType -ne 'linux') {
-    throw "Docker is currently using '$osType' containers. This stack requires Linux containers."
+    $wslDistro = Find-WslDockerDistro
+    if ($wslDistro) {
+      $script:WslDistro = $wslDistro
+      Write-Host "Using Docker inside WSL distro: $wslDistro"
+      return 'wsl'
+    }
+    throw "Docker is currently using '$osType' containers. This stack requires Linux containers, and no working WSL Docker distro was found."
   }
 
   return 'windows'
 }
 
+function Get-WslDistros {
+  $wsl = Get-Command wsl -ErrorAction SilentlyContinue
+  if (-not $wsl) {
+    return @()
+  }
+
+  $raw = wsl --list --quiet 2>$null
+  if ($LASTEXITCODE -ne 0 -or -not $raw) {
+    return @()
+  }
+
+  return @(
+    $raw |
+      ForEach-Object { ($_ -replace "`0", '').Trim() } |
+      Where-Object { $_ }
+  )
+}
+
+function Test-WslDockerDistro {
+  param([string]$Distro)
+
+  if (-not $Distro) {
+    return $false
+  }
+
+  wsl -d $Distro -u root -- bash -lc 'docker info >/dev/null 2>&1 || service docker start >/dev/null 2>&1 || true; docker info >/dev/null 2>&1 && docker compose version >/dev/null 2>&1' 2>$null
+  return ($LASTEXITCODE -eq 0)
+}
+
+function Find-WslDockerDistro {
+  $distros = @(Get-WslDistros)
+  if ($distros.Count -eq 0) {
+    return $null
+  }
+
+  $preferred = @('Ubuntu-24.04', 'Ubuntu-22.04', 'Ubuntu', 'Debian')
+  foreach ($name in $preferred) {
+    if ($distros -contains $name -and (Test-WslDockerDistro -Distro $name)) {
+      return $name
+    }
+  }
+
+  foreach ($distro in $distros) {
+    if (Test-WslDockerDistro -Distro $distro) {
+      return $distro
+    }
+  }
+
+  return $null
+}
+
 function Ensure-WindowsServerDocker {
-  Write-Host "Windows Server detected. Using WSL2 + Ubuntu + Docker Engine."
-  wsl -d Ubuntu-24.04 -u root -- bash -lc 'docker info >/dev/null 2>&1 && docker compose version >/dev/null 2>&1'
-  if ($LASTEXITCODE -eq 0) {
+  Write-Host "Windows Server detected. Using WSL2 + Docker Engine."
+  $existing = Find-WslDockerDistro
+  if ($existing) {
+    $script:WslDistro = $existing
+    Write-Host "Existing WSL Docker detected: $existing"
     return
   }
 
@@ -229,7 +322,14 @@ function Invoke-WslZabbix {
     [string]$LinuxAction
   )
 
-  $linuxPath = (wsl -d Ubuntu-24.04 -u root -- wslpath -a $PSScriptRoot).Trim()
+  if (-not $script:WslDistro) {
+    $script:WslDistro = Find-WslDockerDistro
+  }
+  if (-not $script:WslDistro) {
+    throw 'No working WSL Docker distro was found.'
+  }
+
+  $linuxPath = (wsl -d $script:WslDistro -u root -- wslpath -a $PSScriptRoot).Trim()
   if ($LASTEXITCODE -ne 0 -or -not $linuxPath) {
     throw 'Failed to resolve workspace path inside WSL.'
   }
@@ -243,7 +343,7 @@ function Invoke-WslZabbix {
     'stop' { $command += './stop-zabbix-linux.sh' }
   }
 
-  wsl -d Ubuntu-24.04 -u root -- bash -lc $command
+  wsl -d $script:WslDistro -u root -- bash -lc $command
   if ($LASTEXITCODE -ne 0) {
     throw "WSL action failed: $LinuxAction"
   }

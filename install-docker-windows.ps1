@@ -22,6 +22,56 @@ function Wait-Docker {
   return $false
 }
 
+function Get-WslDistros {
+  if (-not (Get-Command wsl -ErrorAction SilentlyContinue)) {
+    return @()
+  }
+
+  $raw = wsl --list --quiet 2>$null
+  if ($LASTEXITCODE -ne 0 -or -not $raw) {
+    return @()
+  }
+
+  return @(
+    $raw |
+      ForEach-Object { ($_ -replace "`0", '').Trim() } |
+      Where-Object { $_ }
+  )
+}
+
+function Test-WslDockerDistro {
+  param([string]$Distro)
+
+  if (-not $Distro) {
+    return $false
+  }
+
+  wsl -d $Distro -u root -- bash -lc 'docker info >/dev/null 2>&1 || service docker start >/dev/null 2>&1 || true; docker info >/dev/null 2>&1 && docker compose version >/dev/null 2>&1' 2>$null
+  return ($LASTEXITCODE -eq 0)
+}
+
+function Find-WslDockerDistro {
+  $distros = @(Get-WslDistros)
+  if ($distros.Count -eq 0) {
+    return $null
+  }
+
+  $preferred = @('Ubuntu-24.04', 'Ubuntu-22.04', 'Ubuntu', 'Debian')
+  foreach ($name in $preferred) {
+    if ($distros -contains $name -and (Test-WslDockerDistro -Distro $name)) {
+      return $name
+    }
+  }
+
+  foreach ($distro in $distros) {
+    if (Test-WslDockerDistro -Distro $distro) {
+      return $distro
+    }
+  }
+
+  return $null
+}
+
 function Install-DockerDesktop {
   Write-Host ''
   Write-Host '[Docker] Installing Docker Desktop for Windows 10/11'
@@ -37,6 +87,13 @@ function Install-DockerDesktop {
       Write-Host 'Docker Desktop is already installed and running.'
       return
     }
+  }
+
+  $wslDistro = Find-WslDockerDistro
+  if ($wslDistro) {
+    Write-Host "Docker Engine is already available inside WSL distro: $wslDistro"
+    Write-Host 'The Zabbix launcher can deploy through this WSL Docker environment.'
+    return
   }
 
   $winget = Get-Command winget -ErrorAction SilentlyContinue
@@ -85,9 +142,9 @@ function Install-WindowsServerDocker {
     throw 'Windows Server Docker bootstrap requires an elevated PowerShell session.'
   }
 
-  wsl -d Ubuntu-24.04 -u root -- bash -lc 'docker info >/dev/null 2>&1 && docker compose version >/dev/null 2>&1' 2>$null
-  if ($LASTEXITCODE -eq 0) {
-    Write-Host 'Docker Engine inside Ubuntu-24.04 is already installed and running.'
+  $existingDistro = Find-WslDockerDistro
+  if ($existingDistro) {
+    Write-Host "Docker Engine is already available inside WSL distro: $existingDistro"
     return
   }
 

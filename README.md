@@ -38,12 +38,13 @@ This is an open-source, beginner-friendly Zabbix deployment package for Windows,
 - Docker 是否正在运行
 - 是否支持 `docker compose`
 - Docker 当前是否为 Linux containers 模式
-- Windows Server 上会额外提示当前要求
+- 是否已有可用的 WSL Docker 环境
+- Windows Server 上会优先复用已有 WSL Docker
 
 如果没有 Docker，启动器会尝试一键安装：
 
-- Windows 10/11：优先通过 `winget install Docker.DockerDesktop` 安装 Docker Desktop；没有 winget 时会下载 Docker Desktop 官方安装器并执行静默安装。
-- Windows Server：不安装 Docker Desktop，改为启用 WSL2、安装 Ubuntu 24.04，并在 Ubuntu 内安装 Docker Engine。
+- Windows 10/11：如果 Docker Desktop 可用，直接使用 Docker Desktop；如果 Docker Desktop 不可用但 WSL 里已有 Docker Engine，会直接复用 WSL Docker 拉取镜像并部署；两者都没有时，优先通过 `winget install Docker.DockerDesktop` 安装 Docker Desktop。
+- Windows Server：不安装 Docker Desktop。会先扫描所有 WSL 发行版，只要发现其中一个已有 Docker Engine + Compose，就直接使用它部署 Zabbix；如果没有，才启用 WSL2、安装 Ubuntu 24.04，并在 Ubuntu 内安装 Docker Engine。
 - Linux：通过 Docker 官方 `get.docker.com` convenience script 安装 Docker Engine 和 Compose 插件。
 
 涉及系统组件启用时，可能需要管理员权限或重启。重启后再次双击启动器即可继续。
