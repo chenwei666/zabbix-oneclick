@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Zabbix Update
+Comment=Check and download updates for the local Zabbix Docker stack
+Terminal=true
+Exec=/usr/bin/env bash -c 'cd "$(dirname "$1")" && chmod +x ./*.sh && ./update-zabbix-linux.sh' _ %k
+Icon=system-software-update
+Categories=Development;System;

@@ -1,0 +1,10 @@
+.env
+*.log
+__pycache__/
+.venv/
+build/
+dist/
+release/
+backups/
+*.spec
+ZabbixOneClickFull.exe

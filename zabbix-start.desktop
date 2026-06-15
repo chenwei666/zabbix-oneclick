@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Zabbix One-Click Start
+Comment=Start the local Zabbix Docker stack
+Terminal=true
+Exec=/usr/bin/env bash -c 'cd "$(dirname "$1")" && chmod +x ./start-zabbix-linux.sh ./stop-zabbix-linux.sh ./status-zabbix-linux.sh && ./start-zabbix-linux.sh' _ %k
+Icon=utilities-terminal
+Categories=Development;System;

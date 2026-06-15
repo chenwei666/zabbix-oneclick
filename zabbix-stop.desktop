@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Zabbix Stop
+Comment=Stop the local Zabbix Docker stack
+Terminal=true
+Exec=/usr/bin/env bash -c 'cd "$(dirname "$1")" && chmod +x ./stop-zabbix-linux.sh && ./stop-zabbix-linux.sh' _ %k
+Icon=utilities-terminal
+Categories=Development;System;
