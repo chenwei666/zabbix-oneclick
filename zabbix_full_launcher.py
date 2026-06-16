@@ -10,7 +10,7 @@ from pathlib import Path
 
 
 APP_NAME = "ZabbixOneClick"
-APP_VERSION = "1.0.3"
+APP_VERSION = "1.0.4"
 EXE_NAME = f"ZabbixOneClick-v{APP_VERSION}.exe"
 ZIP_NAME = f"ZabbixOneClick-v{APP_VERSION}.zip"
 PAYLOAD_DIR_NAME = "zabbix_payload"
@@ -21,6 +21,7 @@ PAYLOAD_FILES = [
     "README.md",
     "README.en.md",
     "LICENSE",
+    "zabbix-oneclick.ico",
     "zabbix-windows.ps1",
     "install-docker-windows.ps1",
     "install-docker-windows.bat",
@@ -64,24 +65,26 @@ WINDOWS_ACTIONS = {
     "13": ("ResetData", "清空重装", "Reset Data"),
     "14": ("InstallDocker", "安装 Docker", "Install Docker"),
     "15": ("ShowFolder", "打开目录", "Open Folder"),
+    "16": ("ChangeAdminPassword", "修改账号密码", "Change Account Password"),
 }
 
 BUTTON_ACTIONS = [
-    ("Start", "启动部署", "Start"),
-    ("Open", "打开网页", "Open"),
-    ("Status", "状态", "Status"),
-    ("HealthCheck", "健康检查", "Health"),
-    ("Configure", "修改配置", "Config"),
-    ("CheckUpdate", "检查更新", "Check"),
-    ("Update", "更新并重启", "Update"),
-    ("Repair", "问题修复", "Repair"),
-    ("Logs", "查看日志", "Logs"),
-    ("Backup", "备份数据库", "Backup"),
-    ("Restart", "重启", "Restart"),
-    ("Stop", "停止", "Stop"),
-    ("ResetData", "清空重装", "Reset"),
-    ("InstallDocker", "安装 Docker", "Docker"),
-    ("ShowFolder", "打开目录", "Folder"),
+    ("Start", "启动部署", "Start", "RUN"),
+    ("Open", "打开网页", "Open", "WEB"),
+    ("HealthCheck", "健康检查", "Health", "OK"),
+    ("Status", "查看状态", "Status", "PS"),
+    ("Logs", "查看日志", "Logs", "LOG"),
+    ("Configure", "修改配置", "Config", "CFG"),
+    ("ChangeAdminPassword", "修改账号密码", "Password", "PWD"),
+    ("CheckUpdate", "检查更新", "Check", "UP"),
+    ("Update", "更新并重启", "Update", "UPD"),
+    ("Repair", "问题修复", "Repair", "FIX"),
+    ("Backup", "备份数据库", "Backup", "BAK"),
+    ("Restart", "重启服务", "Restart", "RST"),
+    ("Stop", "停止服务", "Stop", "OFF"),
+    ("ResetData", "清空重装", "Reset", "DEL"),
+    ("InstallDocker", "安装 Docker", "Docker", "DKR"),
+    ("ShowFolder", "打开目录", "Folder", "DIR"),
 ]
 
 ALIASES = {
@@ -102,6 +105,8 @@ ALIASES = {
     "stop": "Stop",
     "reset": "ResetData",
     "reset-data": "ResetData",
+    "password": "ChangeAdminPassword",
+    "change-password": "ChangeAdminPassword",
     "install-docker": "InstallDocker",
     "folder": "ShowFolder",
 }
@@ -247,46 +252,132 @@ def write_env(root: Path, updates: dict[str, str]) -> None:
 def usage() -> str:
     return (
         f"Usage: {EXE_NAME} "
-        "[start|open|status|health-check|configure|check-update|update|repair|backup|logs|restart|stop|reset-data|install-docker|folder]"
+        "[start|open|status|health-check|configure|check-update|update|repair|backup|logs|restart|stop|reset-data|password|install-docker|folder]"
     )
 
 
 def launch_gui(root: Path) -> int:
     import tkinter as tk
-    from tkinter import messagebox, scrolledtext, ttk
+    from tkinter import filedialog, messagebox, scrolledtext, ttk
 
     command_queue: queue.Queue[tuple[str, str | int]] = queue.Queue()
     running = {"value": False}
-    buttons: list[ttk.Button] = []
+    password_user = {"value": "Admin"}
+    buttons: list[tk.Button] = []
 
     app = tk.Tk()
     app.title(f"Zabbix One-Click v{APP_VERSION}")
-    app.geometry("980x680")
-    app.minsize(860, 560)
+    app.geometry("1180x760")
+    app.minsize(960, 620)
+    icon_path = resource_root() / "zabbix-oneclick.ico"
+    if icon_path.exists() and platform.system().lower() == "windows":
+        try:
+            app.iconbitmap(str(icon_path))
+        except tk.TclError:
+            pass
 
     style = ttk.Style()
     style.theme_use("clam")
-    style.configure("Title.TLabel", font=("Microsoft YaHei UI", 15, "bold"))
-    style.configure("Hint.TLabel", foreground="#555")
-    style.configure("Action.TButton", padding=(10, 8))
+    style.configure("TFrame", background="#f3f5f8")
+    style.configure("Title.TLabel", background="#f3f5f8", foreground="#111827", font=("Microsoft YaHei UI", 18, "bold"))
+    style.configure("Hint.TLabel", background="#f3f5f8", foreground="#6b7280", font=("Microsoft YaHei UI", 9))
+    style.configure("Card.TFrame", background="#ffffff", relief="flat")
+    style.configure("CardTitle.TLabel", background="#ffffff", foreground="#6b7280", font=("Microsoft YaHei UI", 9))
+    style.configure("CardValue.TLabel", background="#ffffff", foreground="#111827", font=("Microsoft YaHei UI", 13, "bold"))
+    style.configure("Side.TFrame", background="#172033")
+    style.configure("SideTitle.TLabel", background="#172033", foreground="#ffffff", font=("Microsoft YaHei UI", 12, "bold"))
+    style.configure("SideHint.TLabel", background="#172033", foreground="#aeb7c8", font=("Microsoft YaHei UI", 9))
+    style.configure("Danger.TButton", foreground="#b91c1c")
 
-    header = ttk.Frame(app, padding=(14, 12, 14, 8))
-    header.pack(fill="x")
-    ttk.Label(header, text=f"Zabbix 一键部署 / One-Click v{APP_VERSION}", style="Title.TLabel").pack(anchor="w")
-    ttk.Label(header, text=f"部署目录 / Deployment folder: {root}", style="Hint.TLabel").pack(anchor="w", pady=(4, 0))
-
-    body = ttk.Frame(app, padding=(14, 6, 14, 14))
-    body.pack(fill="both", expand=True)
-
-    sidebar = ttk.Frame(body)
-    sidebar.pack(side="left", fill="y", padx=(0, 12))
-
-    log_box = scrolledtext.ScrolledText(body, wrap="word", font=("Consolas", 10), height=28)
-    log_box.pack(side="left", fill="both", expand=True)
+    app.configure(background="#f3f5f8")
+    app.grid_rowconfigure(1, weight=1)
+    app.grid_columnconfigure(0, weight=1)
 
     status_text = tk.StringVar(value="就绪 / Ready")
-    status = ttk.Label(app, textvariable=status_text, anchor="w", padding=(14, 0, 14, 10))
-    status.pack(fill="x")
+    web_url_text = tk.StringVar()
+    port_text = tk.StringVar()
+    deploy_text = tk.StringVar(value=str(root))
+    login_text = tk.StringVar(value="Admin / zabbix")
+    last_action_text = tk.StringVar(value="无 / None")
+
+    def refresh_dashboard_values() -> None:
+        values = read_env(root)
+        web_port = values.get("ZABBIX_WEB_PORT", "8080")
+        server_port = values.get("ZABBIX_SERVER_PORT", "10051")
+        web_url_text.set(f"http://localhost:{web_port}")
+        port_text.set(f"Web {web_port} / Server {server_port}")
+
+    refresh_dashboard_values()
+
+    header = ttk.Frame(app, padding=(18, 16, 18, 12))
+    header.grid(row=0, column=0, sticky="ew")
+    header.grid_columnconfigure(0, weight=1)
+    ttk.Label(header, text=f"Zabbix 一键部署 / One-Click v{APP_VERSION}", style="Title.TLabel").grid(row=0, column=0, sticky="w")
+    ttk.Label(header, textvariable=deploy_text, style="Hint.TLabel").grid(row=1, column=0, sticky="ew", pady=(5, 0))
+
+    status = ttk.Label(header, textvariable=status_text, anchor="e", style="Hint.TLabel")
+    status.grid(row=0, column=1, rowspan=2, sticky="e")
+
+    main = ttk.Frame(app, padding=(18, 0, 18, 16))
+    main.grid(row=1, column=0, sticky="nsew")
+    main.grid_rowconfigure(0, weight=1)
+    main.grid_columnconfigure(1, weight=1)
+
+    sidebar = ttk.Frame(main, style="Side.TFrame", padding=(12, 14))
+    sidebar.grid(row=0, column=0, sticky="ns", padx=(0, 14))
+    sidebar.grid_columnconfigure(0, weight=1)
+    ttk.Label(sidebar, text="操作面板", style="SideTitle.TLabel").grid(row=0, column=0, sticky="w")
+    ttk.Label(sidebar, text="Actions", style="SideHint.TLabel").grid(row=1, column=0, sticky="w", pady=(0, 10))
+
+    center = ttk.Frame(main)
+    center.grid(row=0, column=1, sticky="nsew")
+    center.grid_rowconfigure(2, weight=1)
+    center.grid_columnconfigure(0, weight=1)
+
+    cards = ttk.Frame(center)
+    cards.grid(row=0, column=0, sticky="ew")
+    for i in range(4):
+        cards.grid_columnconfigure(i, weight=1, uniform="cards")
+
+    def make_card(parent, col: int, title: str, variable: tk.StringVar) -> None:
+        card = ttk.Frame(parent, style="Card.TFrame", padding=(14, 12))
+        card.grid(row=0, column=col, sticky="ew", padx=(0 if col == 0 else 8, 0))
+        ttk.Label(card, text=title, style="CardTitle.TLabel").pack(anchor="w")
+        ttk.Label(card, textvariable=variable, style="CardValue.TLabel").pack(anchor="w", pady=(6, 0))
+
+    make_card(cards, 0, "访问地址 / Web", web_url_text)
+    make_card(cards, 1, "端口 / Ports", port_text)
+    make_card(cards, 2, "默认账号 / Login", login_text)
+    make_card(cards, 3, "最近操作 / Last Action", last_action_text)
+
+    toolbar = ttk.Frame(center, padding=(0, 12, 0, 8))
+    toolbar.grid(row=1, column=0, sticky="ew")
+    toolbar.grid_columnconfigure(6, weight=1)
+    ttk.Button(toolbar, text="打开网页", command=lambda: stream_action("Open")).grid(row=0, column=0, padx=(0, 8))
+    ttk.Button(toolbar, text="复制地址", command=lambda: copy_text(web_url_text.get())).grid(row=0, column=1, padx=(0, 8))
+    ttk.Button(toolbar, text="修改密码", command=lambda: open_password_dialog()).grid(row=0, column=2, padx=(0, 8))
+    ttk.Button(toolbar, text="清空日志", command=lambda: clear_log()).grid(row=0, column=3, padx=(0, 8))
+    ttk.Button(toolbar, text="复制日志", command=lambda: copy_text(log_box.get("1.0", "end-1c"))).grid(row=0, column=4, padx=(0, 8))
+    ttk.Button(toolbar, text="保存日志", command=lambda: save_log()).grid(row=0, column=5, padx=(0, 8))
+
+    log_frame = ttk.Frame(center, style="Card.TFrame", padding=(1, 1))
+    log_frame.grid(row=2, column=0, sticky="nsew")
+    log_frame.grid_rowconfigure(0, weight=1)
+    log_frame.grid_columnconfigure(0, weight=1)
+
+    log_box = scrolledtext.ScrolledText(
+        log_frame,
+        wrap="word",
+        font=("Cascadia Mono", 10),
+        background="#0f172a",
+        foreground="#dbeafe",
+        insertbackground="#ffffff",
+        relief="flat",
+        borderwidth=0,
+        padx=12,
+        pady=10,
+    )
+    log_box.grid(row=0, column=0, sticky="nsew")
 
     def append(text: str) -> None:
         log_box.insert("end", text)
@@ -297,7 +388,31 @@ def launch_gui(root: Path) -> int:
         for button in buttons:
             button.configure(state=("disabled" if value else "normal"))
 
-    def stream_action(action: str) -> None:
+    def copy_text(text: str) -> None:
+        app.clipboard_clear()
+        app.clipboard_append(text)
+        status_text.set("已复制到剪贴板 / Copied")
+
+    def clear_log() -> None:
+        log_box.delete("1.0", "end")
+
+    def save_log() -> None:
+        log_dir = root / "logs"
+        log_dir.mkdir(exist_ok=True)
+        default = log_dir / "zabbix-oneclick-gui.log"
+        path = filedialog.asksaveasfilename(
+            title="保存日志 / Save log",
+            initialdir=str(log_dir),
+            initialfile=default.name,
+            defaultextension=".log",
+            filetypes=[("Log files", "*.log"), ("Text files", "*.txt"), ("All files", "*.*")],
+        )
+        if not path:
+            return
+        Path(path).write_text(log_box.get("1.0", "end-1c"), encoding="utf-8")
+        status_text.set(f"日志已保存 / Saved: {path}")
+
+    def stream_action(action: str, env_overrides: dict[str, str] | None = None) -> None:
         if action == "ShowFolder":
             subprocess.Popen(["explorer", str(root)])
             return
@@ -306,6 +421,9 @@ def launch_gui(root: Path) -> int:
             return
         if action == "Configure":
             open_config_dialog()
+            return
+        if action == "ChangeAdminPassword":
+            open_password_dialog()
             return
         if action == "ResetData" and not messagebox.askyesno(
             "清空重装 / Reset Data",
@@ -317,6 +435,7 @@ def launch_gui(root: Path) -> int:
 
         set_busy(True)
         status_text.set(f"运行中 / Running: {action}")
+        last_action_text.set(action)
         append(f"\n>>> {action}\n")
 
         def worker() -> None:
@@ -326,6 +445,10 @@ def launch_gui(root: Path) -> int:
                 startupinfo = subprocess.STARTUPINFO()
                 startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
                 creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+
+            child_env = os.environ.copy()
+            if env_overrides:
+                child_env.update(env_overrides)
 
             process = subprocess.Popen(
                 powershell_command(action, root),
@@ -337,6 +460,7 @@ def launch_gui(root: Path) -> int:
                 encoding=locale.getpreferredencoding(False),
                 errors="replace",
                 bufsize=1,
+                env=child_env,
                 startupinfo=startupinfo,
                 creationflags=creationflags,
             )
@@ -358,6 +482,9 @@ def launch_gui(root: Path) -> int:
                     code = int(payload)
                     status_text.set("完成 / Completed" if code == 0 else f"失败 / Failed: exit {code}")
                     append(f"\n<<< Exit code: {code}\n")
+                    if code == 0 and last_action_text.get() == "ChangeAdminPassword":
+                        login_text.set(f"{password_user['value']} / 已修改")
+                    refresh_dashboard_values()
                     set_busy(False)
         except queue.Empty:
             pass
@@ -369,15 +496,16 @@ def launch_gui(root: Path) -> int:
         dialog.title("修改配置 / Configure")
         dialog.transient(app)
         dialog.grab_set()
-        dialog.resizable(False, False)
+        dialog.resizable(True, False)
 
         frame = ttk.Frame(dialog, padding=16)
         frame.pack(fill="both", expand=True)
+        frame.grid_columnconfigure(1, weight=1)
         entries: dict[str, ttk.Entry] = {}
 
         for row, (key, label) in enumerate(ENV_FIELDS):
             ttk.Label(frame, text=label).grid(row=row, column=0, sticky="w", pady=5, padx=(0, 12))
-            entry = ttk.Entry(frame, width=36)
+            entry = ttk.Entry(frame, width=42)
             entry.insert(0, values.get(key, ""))
             entry.grid(row=row, column=1, sticky="ew", pady=5)
             entries[key] = entry
@@ -393,6 +521,7 @@ def launch_gui(root: Path) -> int:
             except Exception as exc:
                 messagebox.showerror("保存失败 / Save failed", f"配置格式不正确: {exc}")
                 return
+            refresh_dashboard_values()
             append("\n配置已保存。重启 Zabbix 后生效。\nConfiguration saved. Restart Zabbix to apply changes.\n")
             dialog.destroy()
 
@@ -401,13 +530,98 @@ def launch_gui(root: Path) -> int:
         ttk.Button(buttons_row, text="取消 / Cancel", command=dialog.destroy).pack(side="right", padx=(8, 0))
         ttk.Button(buttons_row, text="保存 / Save", command=save).pack(side="right")
 
-    for action, zh, en in BUTTON_ACTIONS:
-        button = ttk.Button(sidebar, text=f"{zh}\n{en}", style="Action.TButton", command=lambda a=action: stream_action(a))
-        button.pack(fill="x", pady=3)
+    def open_password_dialog() -> None:
+        dialog = tk.Toplevel(app)
+        dialog.title("修改 Zabbix 账号密码 / Change Password")
+        dialog.transient(app)
+        dialog.grab_set()
+        dialog.resizable(False, False)
+
+        frame = ttk.Frame(dialog, padding=16)
+        frame.pack(fill="both", expand=True)
+
+        fields = [
+            ("user", "用户名 / Username", "Admin", False),
+            ("current", "当前密码 / Current password", "zabbix", True),
+            ("new", "新密码 / New password", "", True),
+            ("confirm", "确认新密码 / Confirm", "", True),
+        ]
+        entries: dict[str, ttk.Entry] = {}
+
+        for row, (key, label, default, secret) in enumerate(fields):
+            ttk.Label(frame, text=label).grid(row=row, column=0, sticky="w", pady=5, padx=(0, 12))
+            entry = ttk.Entry(frame, width=34, show="*" if secret else "")
+            entry.insert(0, default)
+            entry.grid(row=row, column=1, sticky="ew", pady=5)
+            entries[key] = entry
+
+        show_var = tk.BooleanVar(value=False)
+
+        def toggle_secret() -> None:
+            show = "" if show_var.get() else "*"
+            for key in ("current", "new", "confirm"):
+                entries[key].configure(show=show)
+
+        ttk.Checkbutton(frame, text="显示密码 / Show passwords", variable=show_var, command=toggle_secret).grid(
+            row=len(fields), column=1, sticky="w", pady=(6, 0)
+        )
+
+        def submit() -> None:
+            user = entries["user"].get().strip() or "Admin"
+            current = entries["current"].get()
+            new = entries["new"].get()
+            confirm = entries["confirm"].get()
+
+            if not current:
+                messagebox.showerror("缺少当前密码", "请输入当前 Zabbix 密码。")
+                return
+            if len(new) < 8:
+                messagebox.showerror("密码太短", "新密码至少需要 8 个字符。")
+                return
+            if new != confirm:
+                messagebox.showerror("两次密码不一致", "请重新确认新密码。")
+                return
+
+            env = {
+                "ZABBIX_ADMIN_USER": user,
+                "ZABBIX_CURRENT_ADMIN_PASSWORD": current,
+                "ZABBIX_NEW_ADMIN_PASSWORD": new,
+            }
+            dialog.destroy()
+            password_user["value"] = user
+            stream_action("ChangeAdminPassword", env)
+
+        buttons_row = ttk.Frame(frame)
+        buttons_row.grid(row=len(fields) + 1, column=0, columnspan=2, sticky="e", pady=(14, 0))
+        ttk.Button(buttons_row, text="取消 / Cancel", command=dialog.destroy).pack(side="right", padx=(8, 0))
+        ttk.Button(buttons_row, text="修改 / Change", command=submit).pack(side="right")
+
+    def add_action_button(row: int, action: str, zh: str, en: str, badge: str) -> None:
+        button = tk.Button(
+            sidebar,
+            text=f"{badge}  {zh}\n     {en}",
+            anchor="w",
+            justify="left",
+            bg="#22304a",
+            fg="#eef2ff",
+            activebackground="#2f4264",
+            activeforeground="#ffffff",
+            relief="flat",
+            borderwidth=0,
+            padx=12,
+            pady=8,
+            font=("Microsoft YaHei UI", 9),
+            command=lambda a=action: stream_action(a),
+        )
+        button.grid(row=row, column=0, sticky="ew", pady=3)
         buttons.append(button)
 
+    for idx, (action, zh, en, badge) in enumerate(BUTTON_ACTIONS, start=2):
+        add_action_button(idx, action, zh, en, badge)
+
     append(f"Zabbix One-Click v{APP_VERSION}\n")
-    append("点击左侧按钮开始部署。日志会显示在这里。\nClick a button on the left to start. Logs appear here.\n")
+    append("点击左侧按钮开始部署、检查、修复和维护。日志会显示在这里。\n")
+    append("Use the left panel to start, check, repair and maintain Zabbix. Logs appear here.\n")
 
     app.after(120, pump_queue)
     app.mainloop()

@@ -5,7 +5,7 @@ Zabbix One-Click is an open-source, beginner-friendly deployment package for run
 The recommended download for beginners is:
 
 ```text
-ZabbixOneClick-v1.0.3.exe
+ZabbixOneClick-v1.0.4.exe
 ```
 
 It is a single-file GUI launcher. On first run, it extracts the deployment files to:
@@ -25,6 +25,7 @@ It is a single-file GUI launcher. On first run, it extracts the deployment files
 - Docker Compose stack for MySQL, Zabbix Server, Web UI, Agent2, Java Gateway, and Web Service
 - Port conflict checks
 - Configuration menu for ports, timezone, image tag, and database password
+- Zabbix account password change through the Web API
 - Update check and update/recreate workflow
 - Health check
 - Repair without deleting data
@@ -37,7 +38,7 @@ It is a single-file GUI launcher. On first run, it extracts the deployment files
 On Windows, run:
 
 ```text
-ZabbixOneClick-v1.0.3.exe
+ZabbixOneClick-v1.0.4.exe
 ```
 
 Click:
@@ -59,7 +60,7 @@ User: Admin
 Password: zabbix
 ```
 
-Change the default password after first login.
+You can change the default password from the launcher after first startup.
 
 ## Linux
 

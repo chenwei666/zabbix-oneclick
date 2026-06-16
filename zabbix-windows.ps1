@@ -1,8 +1,11 @@
 param(
-  [ValidateSet('Start', 'Stop', 'Restart', 'Status', 'Logs', 'Open', 'CheckUpdate', 'Update', 'Configure', 'HealthCheck', 'Repair', 'Backup', 'ResetData')]
+  [ValidateSet('Start', 'Stop', 'Restart', 'Status', 'Logs', 'Open', 'CheckUpdate', 'Update', 'Configure', 'HealthCheck', 'Repair', 'Backup', 'ResetData', 'ChangeAdminPassword')]
   [string]$Action = 'Start',
   [switch]$OpenBrowser,
-  [switch]$Yes
+  [switch]$Yes,
+  [string]$AdminUser = '',
+  [string]$CurrentAdminPassword = '',
+  [string]$NewAdminPassword = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -457,6 +460,87 @@ function Invoke-HealthCheck {
   docker compose logs --tail=30 zabbix-server zabbix-web
 }
 
+function Invoke-ZabbixApi {
+  param(
+    [string]$Method,
+    [object]$ApiParams,
+    [string]$AuthToken = '',
+    [int]$Id = 1
+  )
+
+  Ensure-EnvFile
+  $webPort = Get-EnvValue -Name 'ZABBIX_WEB_PORT' -DefaultValue '8080'
+  $body = @{
+    jsonrpc = '2.0'
+    method = $Method
+    params = $ApiParams
+    id = $Id
+  }
+  if ($AuthToken) {
+    $body.auth = $AuthToken
+  }
+
+  $json = $body | ConvertTo-Json -Depth 20
+  try {
+    $response = Invoke-RestMethod -UseBasicParsing -Uri "http://localhost:$webPort/api_jsonrpc.php" -Method Post -ContentType 'application/json-rpc' -Body $json -TimeoutSec 30
+  } catch {
+    throw "Zabbix API request failed. Make sure Zabbix Web is running at http://localhost:$webPort. $($_.Exception.Message)"
+  }
+
+  if ($response.error) {
+    $message = $response.error.message
+    $data = $response.error.data
+    if ($data) {
+      throw "Zabbix API error: $message - $data"
+    }
+    throw "Zabbix API error: $message"
+  }
+
+  return $response.result
+}
+
+function Invoke-ChangeAdminPassword {
+  Write-Title 'Change Zabbix account password'
+  Ensure-EnvFile
+
+  $user = if ($AdminUser) { $AdminUser } elseif ($env:ZABBIX_ADMIN_USER) { $env:ZABBIX_ADMIN_USER } else { 'Admin' }
+  $currentPassword = if ($CurrentAdminPassword) { $CurrentAdminPassword } else { $env:ZABBIX_CURRENT_ADMIN_PASSWORD }
+  $newPassword = if ($NewAdminPassword) { $NewAdminPassword } else { $env:ZABBIX_NEW_ADMIN_PASSWORD }
+
+  if (-not $user) {
+    throw 'Zabbix username cannot be empty.'
+  }
+  if (-not $currentPassword) {
+    throw 'Current Zabbix password is required.'
+  }
+  if (-not $newPassword -or $newPassword.Length -lt 8) {
+    throw 'New Zabbix password must be at least 8 characters.'
+  }
+
+  Write-Host "Logging in to Zabbix API as '$user'..."
+  $token = Invoke-ZabbixApi -Method 'user.login' -ApiParams @{ username = $user; password = $currentPassword } -Id 1
+  if (-not $token) {
+    throw 'Zabbix login failed. Check the current username and password.'
+  }
+
+  try {
+    $users = @(Invoke-ZabbixApi -Method 'user.get' -ApiParams @{ output = @('userid', 'username'); filter = @{ username = @($user) } } -AuthToken $token -Id 2)
+    if ($users.Count -lt 1) {
+      throw "Zabbix user '$user' was not found."
+    }
+    $userid = $users[0].userid
+    $null = Invoke-ZabbixApi -Method 'user.update' -ApiParams @{ userid = $userid; passwd = $newPassword } -AuthToken $token -Id 3
+    Write-Host "Password changed successfully for Zabbix user '$user'."
+    Write-Host 'Use the new password the next time you sign in.'
+  } finally {
+    try {
+      $null = Invoke-ZabbixApi -Method 'user.logout' -ApiParams @() -AuthToken $token -Id 4
+    } catch {
+      # Logout failure should not hide a successful password update.
+    }
+  }
+}
+
 function Invoke-Configure {
   Write-Title 'Configure'
   Ensure-EnvFile
@@ -836,6 +920,9 @@ try {
     }
     'ResetData' {
       Invoke-ResetData
+    }
+    'ChangeAdminPassword' {
+      Invoke-ChangeAdminPassword
     }
   }
 } catch {

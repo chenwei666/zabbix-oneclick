@@ -1,6 +1,6 @@
 $ErrorActionPreference = 'Stop'
 Set-Location -LiteralPath $PSScriptRoot
-$appVersion = '1.0.3'
+$appVersion = '1.0.4'
 $exeFile = "ZabbixOneClick-v$appVersion.exe"
 
 $releaseRoot = Join-Path $PSScriptRoot 'release'
@@ -19,6 +19,7 @@ $files = @(
   'README.md',
   'README.en.md',
   'LICENSE',
+  'zabbix-oneclick.ico',
   'zabbix-windows.ps1',
   'install-docker-windows.ps1',
   'install-docker-windows.bat',

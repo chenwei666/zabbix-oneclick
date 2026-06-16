@@ -1,6 +1,6 @@
 $ErrorActionPreference = 'Stop'
 Set-Location -LiteralPath $PSScriptRoot
-$appVersion = '1.0.3'
+$appVersion = '1.0.4'
 $exeName = "ZabbixOneClick-v$appVersion"
 $exeFile = "$exeName.exe"
 
@@ -20,6 +20,7 @@ $payloadFiles = @(
   'README.md',
   'README.en.md',
   'LICENSE',
+  'zabbix-oneclick.ico',
   'zabbix-windows.ps1',
   'install-docker-windows.ps1',
   'install-docker-windows.bat',
@@ -58,6 +59,7 @@ foreach ($file in $payloadFiles) {
 & .\.venv\Scripts\python.exe -m PyInstaller `
   --onefile `
   --windowed `
+  --icon .\zabbix-oneclick.ico `
   --name $exeName `
   @addData `
   .\zabbix_full_launcher.py
