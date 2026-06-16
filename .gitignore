@@ -8,3 +8,4 @@ release/
 backups/
 *.spec
 ZabbixOneClickFull.exe
+ZabbixOneClick-v*.exe

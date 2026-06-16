@@ -1,5 +1,8 @@
 $ErrorActionPreference = 'Stop'
 Set-Location -LiteralPath $PSScriptRoot
+$appVersion = '1.0.3'
+$exeName = "ZabbixOneClick-v$appVersion"
+$exeFile = "$exeName.exe"
 
 if (-not (Get-Command python -ErrorAction SilentlyContinue)) {
   throw 'Python was not found. Install Python 3 first, then run this build script again.'
@@ -54,20 +57,20 @@ foreach ($file in $payloadFiles) {
 
 & .\.venv\Scripts\python.exe -m PyInstaller `
   --onefile `
-  --console `
-  --name ZabbixOneClickFull `
+  --windowed `
+  --name $exeName `
   @addData `
   .\zabbix_full_launcher.py
 
-Copy-Item -LiteralPath '.\dist\ZabbixOneClickFull.exe' -Destination '.\ZabbixOneClickFull.exe' -Force
+Copy-Item -LiteralPath ".\dist\$exeFile" -Destination ".\$exeFile" -Force
 
 $releaseRoot = Join-Path $PSScriptRoot 'release'
 if (-not (Test-Path -LiteralPath $releaseRoot)) {
   New-Item -ItemType Directory -Path $releaseRoot | Out-Null
 }
-Copy-Item -LiteralPath '.\ZabbixOneClickFull.exe' -Destination (Join-Path $releaseRoot 'ZabbixOneClickFull.exe') -Force
+Copy-Item -LiteralPath ".\$exeFile" -Destination (Join-Path $releaseRoot $exeFile) -Force
 
 Write-Host ''
 Write-Host 'Full single-file EXE built successfully:'
-Write-Host (Resolve-Path '.\ZabbixOneClickFull.exe')
-Write-Host (Resolve-Path '.\release\ZabbixOneClickFull.exe')
+Write-Host (Resolve-Path ".\$exeFile")
+Write-Host (Resolve-Path ".\release\$exeFile")

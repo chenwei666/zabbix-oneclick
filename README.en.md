@@ -5,10 +5,10 @@ Zabbix One-Click is an open-source, beginner-friendly deployment package for run
 The recommended download for beginners is:
 
 ```text
-ZabbixOneClickFull.exe
+ZabbixOneClick-v1.0.3.exe
 ```
 
-It is a single-file launcher. On first run, it extracts the deployment files to:
+It is a single-file GUI launcher. On first run, it extracts the deployment files to:
 
 ```text
 %LOCALAPPDATA%\ZabbixOneClick
@@ -30,20 +30,20 @@ It is a single-file launcher. On first run, it extracts the deployment files to:
 - Repair without deleting data
 - Database backup
 - Reset/reinstall with explicit confirmation
-- Bilingual Chinese/English launcher menu
+- Bilingual Chinese/English click-based GUI launcher
 
 ## Quick Start
 
 On Windows, run:
 
 ```text
-ZabbixOneClickFull.exe
+ZabbixOneClick-v1.0.3.exe
 ```
 
-Choose:
+Click:
 
 ```text
-1. Start Zabbix
+Start
 ```
 
 Then open:

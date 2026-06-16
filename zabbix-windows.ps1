@@ -1,7 +1,8 @@
 param(
   [ValidateSet('Start', 'Stop', 'Restart', 'Status', 'Logs', 'Open', 'CheckUpdate', 'Update', 'Configure', 'HealthCheck', 'Repair', 'Backup', 'ResetData')]
   [string]$Action = 'Start',
-  [switch]$OpenBrowser
+  [switch]$OpenBrowser,
+  [switch]$Yes
 )
 
 $ErrorActionPreference = 'Stop'
@@ -581,10 +582,12 @@ function Invoke-Backup {
 function Invoke-ResetData {
   Write-Title 'Reset data'
   Write-Host 'This deletes all Zabbix database data for this local stack.'
-  $answer = Read-Host 'Type DELETE to continue'
-  if ($answer -ne 'DELETE') {
-    Write-Host 'Cancelled.'
-    return
+  if (-not $Yes) {
+    $answer = Read-Host 'Type DELETE to continue'
+    if ($answer -ne 'DELETE') {
+      Write-Host 'Cancelled.'
+      return
+    }
   }
 
   $mode = Ensure-Docker
@@ -618,6 +621,55 @@ function Get-ImageId {
   return ($id | Select-Object -First 1).Trim()
 }
 
+function Invoke-DockerPullImage {
+  param(
+    [string]$Image,
+    [int]$Attempts = 3
+  )
+
+  for ($attempt = 1; $attempt -le $Attempts; $attempt++) {
+    Write-Host "Pulling $Image (attempt $attempt/$Attempts) ..."
+    docker pull $Image
+    if ($LASTEXITCODE -eq 0) {
+      return $true
+    }
+
+    if ($attempt -lt $Attempts) {
+      Write-Host "Download failed. Retrying in 10 seconds..." -ForegroundColor Yellow
+      Start-Sleep -Seconds 10
+    }
+  }
+
+  if (Get-ImageId -Image $Image) {
+    Write-Host "Could not refresh $Image, but a local copy exists. Continuing with the local image." -ForegroundColor Yellow
+    return $true
+  }
+
+  Write-Host ''
+  Write-Host "Failed to download $Image." -ForegroundColor Red
+  Write-Host 'This is usually a Docker Hub network timeout. Check the server network, DNS, proxy, or try again later.' -ForegroundColor Yellow
+  return $false
+}
+
+function Invoke-DockerPullStack {
+  $images = Get-ComposeImages
+
+  Write-Host 'Images in this stack:'
+  $images | ForEach-Object { Write-Host "  - $_" }
+  Write-Host ''
+
+  $failed = @()
+  foreach ($image in $images) {
+    if (-not (Invoke-DockerPullImage -Image $image -Attempts 3)) {
+      $failed += $image
+    }
+  }
+
+  if ($failed.Count -gt 0) {
+    throw "Failed to download required Docker images: $($failed -join ', ')"
+  }
+}
+
 function Invoke-ImageRefresh {
   param([switch]$Apply)
 
@@ -633,15 +685,7 @@ function Invoke-ImageRefresh {
   foreach ($image in $images) {
     $before = Get-ImageId -Image $image
 
-    if ($Apply) {
-      Write-Host "Pulling $image ..."
-      docker pull $image
-    } else {
-      Write-Host "Checking $image ..."
-      docker pull $image
-    }
-
-    if ($LASTEXITCODE -ne 0) {
+    if (-not (Invoke-DockerPullImage -Image $image -Attempts 3)) {
       throw "Failed to download image: $image"
     }
 
@@ -687,8 +731,7 @@ try {
       Test-ComposeConfig
       Test-PortsBeforeStart
       Write-Host 'Pulling required images. This may take several minutes the first time.'
-      docker compose pull
-      if ($LASTEXITCODE -ne 0) { throw 'Failed to pull Docker images.' }
+      Invoke-DockerPullStack
       Write-Host 'Starting Zabbix...'
       docker compose up -d
       if ($LASTEXITCODE -ne 0) { throw 'Failed to start Zabbix.' }

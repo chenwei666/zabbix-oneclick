@@ -1,9 +1,11 @@
 $ErrorActionPreference = 'Stop'
 Set-Location -LiteralPath $PSScriptRoot
+$appVersion = '1.0.3'
+$exeFile = "ZabbixOneClick-v$appVersion.exe"
 
 $releaseRoot = Join-Path $PSScriptRoot 'release'
-$packageDir = Join-Path $releaseRoot 'ZabbixOneClick'
-$zipPath = Join-Path $releaseRoot 'ZabbixOneClick.zip'
+$packageDir = Join-Path $releaseRoot "ZabbixOneClick-v$appVersion"
+$zipPath = Join-Path $releaseRoot "ZabbixOneClick-v$appVersion.zip"
 
 if (Test-Path -LiteralPath $packageDir) {
   Remove-Item -LiteralPath $packageDir -Recurse -Force
@@ -11,7 +13,7 @@ if (Test-Path -LiteralPath $packageDir) {
 New-Item -ItemType Directory -Path $packageDir | Out-Null
 
 $files = @(
-  'ZabbixOneClick.exe',
+  $exeFile,
   'compose.yaml',
   '.env.example',
   'README.md',

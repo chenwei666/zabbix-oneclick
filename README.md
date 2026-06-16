@@ -6,12 +6,12 @@
 
 This is an open-source, beginner-friendly Zabbix deployment package for Windows, Windows Server, and Linux. It uses Docker Compose and includes automatic environment checks, image downloads, startup, update checks, repair tools, and backup helpers.
 
-最简单用法有两种：
+最简单用法：
 
-- 只发一个文件：使用 `ZabbixOneClickFull.exe`
-- 发完整文件夹：解压 `release\ZabbixOneClick.zip` 后运行 `ZabbixOneClick.exe`
+- Windows 新手推荐：下载并双击 `ZabbixOneClick-v1.0.3.exe`
+- 完整文件包：解压 `release\ZabbixOneClick-v1.0.3.zip`
 
-推荐给新手使用 `ZabbixOneClickFull.exe`。
+新版 Windows EXE 是点击式界面，左侧按钮执行启动、状态、健康检查、更新、修复、备份、停止等操作，右侧显示实时日志。
 
 默认启动组件：
 
@@ -125,20 +125,19 @@ chmod +x *.sh
 
 ## EXE 封装
 
-已经提供两种 EXE：
+推荐使用单文件 GUI 版：
 
 ```text
-ZabbixOneClickFull.exe  单文件完整版，内置 compose 和所有脚本，推荐发给新手
-ZabbixOneClick.exe      文件夹版启动器，需要同目录保留 compose 和脚本
+ZabbixOneClick-v1.0.3.exe  单文件 GUI 版，内置 compose 和所有脚本，推荐发给新手
 ```
 
-`ZabbixOneClickFull.exe` 第一次运行时会自动解包到：
+`ZabbixOneClick-v1.0.3.exe` 第一次运行时会自动解包到：
 
 ```text
 %LOCALAPPDATA%\ZabbixOneClick
 ```
 
-后续配置、`.env`、备份和日志都围绕这个部署目录工作。菜单里有“打开部署目录”。
+后续配置、`.env`、备份和日志都围绕这个部署目录工作。界面里有“打开目录”按钮。
 
 源码入口：
 
@@ -157,11 +156,11 @@ PowerShell -NoProfile -ExecutionPolicy Bypass -File .\build-full-exe-windows.ps1
 构建成功后会生成：
 
 ```text
-dist\ZabbixOneClick.exe
-dist\ZabbixOneClickFull.exe
+dist\ZabbixOneClick-v1.0.3.exe
+release\ZabbixOneClick-v1.0.3.exe
 ```
 
-这个 EXE 是一个菜单启动器，支持：
+这个 EXE 是一个点击式 GUI 启动器，支持：
 
 - 启动 Zabbix
 - 打开网页
@@ -178,25 +177,27 @@ dist\ZabbixOneClickFull.exe
 - 清空重装
 - 安装 Docker
 
-注意：EXE 只封装启动控制逻辑，不会把 Docker、MySQL、Zabbix 镜像塞进 EXE。首次运行仍会通过 Docker 下载官方镜像。交付给别人时请发整个 `release\ZabbixOneClick.zip`，不要只发单独的 EXE。
+注意：EXE 只封装启动控制逻辑，不会把 Docker、MySQL、Zabbix 镜像塞进 EXE。首次运行仍会通过 Docker 下载官方镜像。交付给别人时推荐直接发送 `release\ZabbixOneClick-v1.0.3.exe`。
 
 ## 打包交付
 
-当前目录已经包含 `ZabbixOneClick.exe`。如果修改了源码后需要重新打包：
+如果修改了源码后需要重新打包：
 
 ```powershell
-PowerShell -NoProfile -ExecutionPolicy Bypass -File .\build-zabbix-exe-windows.ps1
+PowerShell -NoProfile -ExecutionPolicy Bypass -File .\build-full-exe-windows.ps1
+PowerShell -NoProfile -ExecutionPolicy Bypass -File .\package-zabbix-windows.ps1
 ```
 
 打包脚本会生成：
 
 ```text
-ZabbixOneClick.exe
-release\ZabbixOneClick\
-release\ZabbixOneClick.zip
+ZabbixOneClick-v1.0.3.exe
+release\ZabbixOneClick-v1.0.3.exe
+release\ZabbixOneClick-v1.0.3\
+release\ZabbixOneClick-v1.0.3.zip
 ```
 
-发给新手用户时，推荐直接给 `release\ZabbixOneClick.zip`。
+发给新手用户时，推荐直接给 `release\ZabbixOneClick-v1.0.3.exe`。
 
 ## 检查更新机制
 
@@ -238,7 +239,7 @@ ZBX_TRENDCACHESIZE=128M
 小白建议不要直接编辑 `.env`，Windows 上直接运行：
 
 ```text
-ZabbixOneClick.exe -> 5. 修改配置
+ZabbixOneClick-v1.0.3.exe -> 修改配置
 ```
 
 启动前脚本会检查端口：
@@ -253,8 +254,8 @@ ZabbixOneClick.exe -> 5. 修改配置
 优先使用：
 
 ```text
-ZabbixOneClick.exe -> 4. 健康检查
-ZabbixOneClick.exe -> 8. 问题修复
+ZabbixOneClick-v1.0.3.exe -> 健康检查
+ZabbixOneClick-v1.0.3.exe -> 问题修复
 ```
 
 健康检查会检查：
@@ -279,7 +280,7 @@ docker compose up -d --force-recreate
 Windows 上可使用：
 
 ```text
-ZabbixOneClick.exe -> 9. 备份数据库
+ZabbixOneClick-v1.0.3.exe -> 备份数据库
 ```
 
 备份文件会保存在：
