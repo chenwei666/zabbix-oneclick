@@ -7,6 +7,7 @@ from pathlib import Path
 
 
 APP_NAME = "ZabbixOneClick"
+APP_VERSION = "1.0.2"
 PAYLOAD_DIR_NAME = "zabbix_payload"
 
 PAYLOAD_FILES = [
@@ -179,7 +180,7 @@ def usage() -> str:
 
 def select_action() -> str:
     print()
-    print("Zabbix One-Click Full / Zabbix 一键部署完整版")
+    print(f"Zabbix One-Click Full {APP_VERSION} / Zabbix 一键部署完整版 {APP_VERSION}")
     print()
     for key, (_, label) in WINDOWS_ACTIONS.items():
         print(f"{key}. {label}")

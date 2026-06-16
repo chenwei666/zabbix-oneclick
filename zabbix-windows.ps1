@@ -15,6 +15,31 @@ function Write-Title {
   Write-Host ''
 }
 
+function Test-NativeCommand {
+  param([scriptblock]$Command)
+
+  $oldPreference = $ErrorActionPreference
+  $ErrorActionPreference = 'Continue'
+  try {
+    & $Command *> $null
+    return ($LASTEXITCODE -eq 0)
+  } finally {
+    $ErrorActionPreference = $oldPreference
+  }
+}
+
+function Invoke-NativeOutput {
+  param([scriptblock]$Command)
+
+  $oldPreference = $ErrorActionPreference
+  $ErrorActionPreference = 'Continue'
+  try {
+    return @(& $Command 2>$null)
+  } finally {
+    $ErrorActionPreference = $oldPreference
+  }
+}
+
 function Get-EnvValue {
   param(
     [string]$Name,
@@ -118,11 +143,25 @@ function Test-PortAvailable {
   )
 
   $targetPort = if ($ServiceName -eq 'zabbix-web') { 8080 } else { 10051 }
-  $published = docker compose port $ServiceName $targetPort 2>$null
-  if ($LASTEXITCODE -eq 0 -and $published) {
-    $publishedPort = ($published | Select-Object -First 1) -replace '^.*:', ''
-    if ($publishedPort -eq [string]$Port) {
-      return
+  $runningServices = @()
+  try {
+    $runningServices = @(docker compose ps --status running --services 2>$null)
+  } catch {
+    $runningServices = @()
+  }
+
+  if ($runningServices -contains $ServiceName) {
+    $published = $null
+    try {
+      $published = docker compose port $ServiceName $targetPort 2>$null
+    } catch {
+      $published = $null
+    }
+    if ($LASTEXITCODE -eq 0 -and $published) {
+      $publishedPort = ($published | Select-Object -First 1) -replace '^.*:', ''
+      if ($publishedPort -eq [string]$Port) {
+        return
+      }
     }
   }
 
@@ -165,12 +204,10 @@ function Ensure-Docker {
 
   $docker = Get-Command docker -ErrorAction SilentlyContinue
   if ($docker) {
-    docker info *> $null
-    $infoOk = ($LASTEXITCODE -eq 0)
-    docker compose version *> $null
-    $composeOk = ($LASTEXITCODE -eq 0)
+    $infoOk = Test-NativeCommand { docker info }
+    $composeOk = Test-NativeCommand { docker compose version }
     if ($infoOk -and $composeOk) {
-      $osType = (docker info --format '{{.OSType}}').Trim()
+      $osType = ((Invoke-NativeOutput { docker info --format '{{.OSType}}' }) | Select-Object -First 1).Trim()
       if ($osType -eq 'linux') {
         return 'windows'
       }
@@ -204,8 +241,7 @@ function Ensure-Docker {
     }
   }
 
-  docker info *> $null
-  if ($LASTEXITCODE -ne 0) {
+  if (-not (Test-NativeCommand { docker info })) {
     $desktop = @(
       "$env:LOCALAPPDATA\Programs\DockerDesktop\Docker Desktop.exe",
       'C:\Program Files\Docker\Docker\Docker Desktop.exe'
@@ -215,14 +251,13 @@ function Ensure-Docker {
       Start-Process -FilePath $desktop -WindowStyle Hidden
       $deadline = (Get-Date).AddMinutes(4)
       do {
-        docker info *> $null
-        if ($LASTEXITCODE -eq 0) {
+        if (Test-NativeCommand { docker info }) {
           break
         }
         Start-Sleep -Seconds 5
       } while ((Get-Date) -lt $deadline)
     }
-    if ($LASTEXITCODE -ne 0) {
+    if (-not (Test-NativeCommand { docker info })) {
       $wslDistro = Find-WslDockerDistro
       if ($wslDistro) {
         $script:WslDistro = $wslDistro
@@ -233,12 +268,11 @@ function Ensure-Docker {
     }
   }
 
-  docker compose version *> $null
-  if ($LASTEXITCODE -ne 0) {
+  if (-not (Test-NativeCommand { docker compose version })) {
     throw 'Docker Compose v2 was not found. Update Docker Desktop or install the Docker Compose plugin.'
   }
 
-  $osType = (docker info --format '{{.OSType}}').Trim()
+  $osType = ((Invoke-NativeOutput { docker info --format '{{.OSType}}' }) | Select-Object -First 1).Trim()
   if ($osType -ne 'linux') {
     $wslDistro = Find-WslDockerDistro
     if ($wslDistro) {
@@ -277,8 +311,7 @@ function Test-WslDockerDistro {
     return $false
   }
 
-  wsl -d $Distro -u root -- bash -lc 'docker info >/dev/null 2>&1 || service docker start >/dev/null 2>&1 || true; docker info >/dev/null 2>&1 && docker compose version >/dev/null 2>&1' 2>$null
-  return ($LASTEXITCODE -eq 0)
+  return (Test-NativeCommand { wsl -d $Distro -u root -- bash -lc 'docker info >/dev/null 2>&1 || service docker start >/dev/null 2>&1 || true; docker info >/dev/null 2>&1 && docker compose version >/dev/null 2>&1' })
 }
 
 function Find-WslDockerDistro {
@@ -370,6 +403,15 @@ function Wait-ZabbixReady {
   } while ((Get-Date) -lt $deadline)
 
   return $false
+}
+
+function Show-StartupDiagnostics {
+  Write-Host ''
+  Write-Host 'Startup diagnostics / 启动诊断:' -ForegroundColor Yellow
+  docker compose ps
+  Write-Host ''
+  Write-Host 'Recent logs / 最近日志:' -ForegroundColor Yellow
+  docker compose logs --tail=80 mysql zabbix-server zabbix-web
 }
 
 function Invoke-HealthCheck {
@@ -502,11 +544,12 @@ function Invoke-Repair {
     throw 'Container repair failed.'
   }
 
-  $ready = Wait-ZabbixReady -Seconds 180
+  $ready = Wait-ZabbixReady -Seconds 480
   if ($ready) {
     Write-Host 'Repair completed. Zabbix Web is reachable.'
   } else {
-    Write-Host 'Repair completed, but Web readiness timed out. Run HealthCheck for details.' -ForegroundColor Yellow
+    Show-StartupDiagnostics
+    Write-Host 'Repair completed, but Web readiness timed out. Diagnostics are shown above.' -ForegroundColor Yellow
   }
 }
 
@@ -655,7 +698,14 @@ try {
       Write-Host "Open: http://localhost:$webPort"
       Write-Host 'Login: Admin / zabbix'
       Write-Host ''
-      Write-Host 'First startup can take 1-3 minutes while the database initializes.'
+      Write-Host 'First startup can take several minutes while the database initializes.'
+      Write-Host 'Waiting for Zabbix Web to become ready...'
+      $ready = Wait-ZabbixReady -Seconds 480
+      if (-not $ready) {
+        Show-StartupDiagnostics
+        throw 'Zabbix Web did not become ready within 8 minutes. See diagnostics above.'
+      }
+      Write-Host 'Zabbix Web is ready.'
       if ($OpenBrowser) {
         Start-Process "http://localhost:$webPort"
       }
