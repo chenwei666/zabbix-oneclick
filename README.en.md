@@ -5,7 +5,7 @@ Zabbix One-Click is an open-source, beginner-friendly deployment package for run
 The recommended download for beginners is:
 
 ```text
-ZabbixOneClick-v1.0.4.exe
+ZabbixOneClick-v1.0.5.exe
 ```
 
 It is a single-file GUI launcher. On first run, it extracts the deployment files to:
@@ -17,6 +17,7 @@ It is a single-file GUI launcher. On first run, it extracts the deployment files
 ## Features
 
 - One-click Zabbix startup
+- Scrollable GUI action menu for smaller windows
 - Automatic Docker installation guidance or bootstrap
 - Windows 10/11 Docker Desktop support
 - Windows Server WSL2 + Ubuntu + Docker Engine path
@@ -38,7 +39,7 @@ It is a single-file GUI launcher. On first run, it extracts the deployment files
 On Windows, run:
 
 ```text
-ZabbixOneClick-v1.0.4.exe
+ZabbixOneClick-v1.0.5.exe
 ```
 
 Click:

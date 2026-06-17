@@ -1,6 +1,6 @@
 $ErrorActionPreference = 'Stop'
 Set-Location -LiteralPath $PSScriptRoot
-$appVersion = '1.0.4'
+$appVersion = '1.0.5'
 $exeFile = "ZabbixOneClick-v$appVersion.exe"
 
 $releaseRoot = Join-Path $PSScriptRoot 'release'

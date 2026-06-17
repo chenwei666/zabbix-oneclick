@@ -10,7 +10,7 @@ from pathlib import Path
 
 
 APP_NAME = "ZabbixOneClick"
-APP_VERSION = "1.0.4"
+APP_VERSION = "1.0.5"
 EXE_NAME = f"ZabbixOneClick-v{APP_VERSION}.exe"
 ZIP_NAME = f"ZabbixOneClick-v{APP_VERSION}.zip"
 PAYLOAD_DIR_NAME = "zabbix_payload"
@@ -326,8 +326,31 @@ def launch_gui(root: Path) -> int:
     sidebar = ttk.Frame(main, style="Side.TFrame", padding=(12, 14))
     sidebar.grid(row=0, column=0, sticky="ns", padx=(0, 14))
     sidebar.grid_columnconfigure(0, weight=1)
+    sidebar.grid_rowconfigure(2, weight=1)
     ttk.Label(sidebar, text="操作面板", style="SideTitle.TLabel").grid(row=0, column=0, sticky="w")
     ttk.Label(sidebar, text="Actions", style="SideHint.TLabel").grid(row=1, column=0, sticky="w", pady=(0, 10))
+
+    menu_canvas = tk.Canvas(sidebar, width=210, background="#172033", highlightthickness=0, borderwidth=0)
+    menu_scrollbar = ttk.Scrollbar(sidebar, orient="vertical", command=menu_canvas.yview)
+    menu_content = tk.Frame(menu_canvas, background="#172033")
+    menu_window = menu_canvas.create_window((0, 0), window=menu_content, anchor="nw")
+    menu_canvas.configure(yscrollcommand=menu_scrollbar.set)
+    menu_canvas.grid(row=2, column=0, sticky="nsew")
+    menu_scrollbar.grid(row=2, column=1, sticky="ns", padx=(6, 0))
+
+    def update_menu_scrollregion(_event=None) -> None:
+        menu_canvas.configure(scrollregion=menu_canvas.bbox("all"))
+
+    def resize_menu_content(event) -> None:
+        menu_canvas.itemconfigure(menu_window, width=event.width)
+
+    def on_menu_mousewheel(event) -> None:
+        menu_canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+
+    menu_content.bind("<Configure>", update_menu_scrollregion)
+    menu_canvas.bind("<Configure>", resize_menu_content)
+    menu_canvas.bind("<Enter>", lambda _event: menu_canvas.bind_all("<MouseWheel>", on_menu_mousewheel))
+    menu_canvas.bind("<Leave>", lambda _event: menu_canvas.unbind_all("<MouseWheel>"))
 
     center = ttk.Frame(main)
     center.grid(row=0, column=1, sticky="nsew")
@@ -598,7 +621,7 @@ def launch_gui(root: Path) -> int:
 
     def add_action_button(row: int, action: str, zh: str, en: str, badge: str) -> None:
         button = tk.Button(
-            sidebar,
+            menu_content,
             text=f"{badge}  {zh}\n     {en}",
             anchor="w",
             justify="left",
@@ -616,7 +639,7 @@ def launch_gui(root: Path) -> int:
         button.grid(row=row, column=0, sticky="ew", pady=3)
         buttons.append(button)
 
-    for idx, (action, zh, en, badge) in enumerate(BUTTON_ACTIONS, start=2):
+    for idx, (action, zh, en, badge) in enumerate(BUTTON_ACTIONS):
         add_action_button(idx, action, zh, en, badge)
 
     append(f"Zabbix One-Click v{APP_VERSION}\n")
